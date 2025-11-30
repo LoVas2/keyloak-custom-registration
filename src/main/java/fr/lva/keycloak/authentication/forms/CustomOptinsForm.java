@@ -16,9 +16,9 @@ import org.keycloak.provider.ProviderConfigProperty;
 
 import java.util.List;
 
-public class CustomConsentsForm implements FormAuthenticator, FormAuthenticatorFactory {
+public class CustomOptinsForm implements FormAuthenticator, FormAuthenticatorFactory {
 
-    public static final String PROVIDER_ID = "custom-consents-form";
+    public static final String PROVIDER_ID = "custom-optins-form";
 
     @Override
     public String getId() {
@@ -32,7 +32,7 @@ public class CustomConsentsForm implements FormAuthenticator, FormAuthenticatorF
 
     @Override
     public String getDisplayType() {
-        return "Custom Consents Form";
+        return "Custom Optins Form";
     }
 
     @Override
@@ -60,7 +60,7 @@ public class CustomConsentsForm implements FormAuthenticator, FormAuthenticatorF
         // bean for dynamic template
         form.setAttribute("profile", rb);
 
-        return form.createForm("register-custom-consents.ftl");
+        return form.createForm("register-custom-optins.ftl");
     }
 
     // Unused methods from Factory //

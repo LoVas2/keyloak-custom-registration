@@ -1,2 +1,3 @@
 fr.lva.keycloak.authentication.forms.CustomCredentialsFormAction
 fr.lva.keycloak.authentication.forms.CustomPersonalDataFormAction
+fr.lva.keycloak.authentication.forms.CustomOptinsFormAction
