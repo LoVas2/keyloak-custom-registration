@@ -9,6 +9,8 @@ import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.*;
 import org.keycloak.models.utils.FormMessage;
+import org.keycloak.policy.PasswordPolicyManagerProvider;
+import org.keycloak.policy.PolicyError;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.services.validation.Validation;
 
@@ -65,25 +67,65 @@ public class CustomCredentialsFormAction implements FormAction, FormActionFactor
         List<FormMessage> errors = new ArrayList<>();
         context.getEvent().detail(Details.REGISTER_METHOD, "form");
 
-        if (Validation.isBlank(formData.getFirst("email"))) {
+        String email = formData.getFirst("email");
+        String emailConfirm = formData.getFirst("email-confirm");
+        String password = formData.getFirst("password");
+        String passwordConfirm = formData.getFirst("password-confirm");
+
+        // ===== EMAIL VALIDATION =====
+
+        if (Validation.isBlank(email)) {
             errors.add(new FormMessage("email", MISSING_EMAIL));
-        } else if (!formData.getFirst("email").equals(formData.getFirst("email-confirm"))) {
+        } else {
+            // Check email format
+            if (!Validation.isEmailValid(email)) {
+                errors.add(new FormMessage("email", INVALID_EMAIL));
+            }
+
+            // Check email is free to use
+            UserModel existingUser = context.getSession().users()
+                    .getUserByEmail(context.getRealm(), email);
+            if (existingUser != null) {
+                // Build password reset URL
+                String resetUrl = context.getSession().getContext().getUri()
+                        .getBaseUriBuilder()
+                        .path("realms")
+                        .path(context.getRealm().getName())
+                        .path("login-actions")
+                        .path("reset-credentials")
+                        .build()
+                        .toString();
+                // Add frontend error with reset password link inside
+                errors.add(new FormMessage("email", EMAIL_EXISTS, resetUrl));
+            }
+        }
+
+        if (!Validation.isBlank(email) && !email.equals(emailConfirm)) {
             errors.add(new FormMessage("email-confirm", Messages.INVALID_EMAIL_CONFIRM));
         }
 
-        // Checks whether the password field is blank
-        if (Validation.isBlank(formData.getFirst(("password")))) {
+        // ===== PASSWORD VALIDATION =====
+
+        if (Validation.isBlank(password)) {
             errors.add(new FormMessage("password", MISSING_PASSWORD));
+        } else {
+            // Check password policies
+            // pass email as username for validation as user is null
+            PolicyError policyError = context.getSession()
+                    .getProvider(PasswordPolicyManagerProvider.class)
+                    .validate(email, password);
+            if (policyError != null) {
+                errors.add(new FormMessage("password", policyError.getMessage(), policyError.getParameters()));
+            }
         }
-        // Checks whether the password and confirm-password fields have same input
-        else if (!formData.getFirst("password").equals(formData.getFirst("password-confirm"))) {
+
+        if (!Validation.isBlank(password) && !password.equals(passwordConfirm)) {
             errors.add(new FormMessage("password-confirm", INVALID_PASSWORD_CONFIRM));
         }
 
-        // Check whether there are any errors – if yes then send context.error
-        // else call context.success
         if (!errors.isEmpty()) {
             context.error(Errors.INVALID_REGISTRATION);
+            // Remove passwords from form
             formData.remove("password");
             formData.remove("password-confirm");
             context.validationError(formData, errors);
@@ -94,15 +136,13 @@ public class CustomCredentialsFormAction implements FormAction, FormActionFactor
 
     @Override
     public void success(FormContext context) {
-        // Called after validate method success
+        // Save user attributes in session to retrieve them later
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-
         context.getAuthenticationSession()
-                .setAuthNote("username", formData.getFirst("username"));
+                .setAuthNote("email", formData.getFirst("email"));
         context.getAuthenticationSession()
                 .setAuthNote("password", formData.getFirst("password"));
-        context.getAuthenticationSession()
-                .setAuthNote("password-confirm", formData.getFirst("password-confirm"));
+
     }
 
     @Override

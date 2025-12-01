@@ -8,6 +8,7 @@ import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.*;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.userprofile.UserProfile;
 import org.keycloak.userprofile.UserProfileContext;
 import org.keycloak.userprofile.UserProfileProvider;
@@ -60,6 +61,14 @@ public class CustomPersonalDataFormAction implements FormAction, FormActionFacto
     public void validate(ValidationContext context) {
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
+        // Fetch all datas from previous steps cause UserProfile valides all data
+        AuthenticationSessionModel authSession = context.getAuthenticationSession();
+        String email = authSession.getAuthNote("email");
+        if (email != null && !email.isEmpty()) {
+            formData.putSingle("email", email);
+            formData.putSingle("username", email);
+        }
+
         UserProfileProvider profileProvider = context.getSession().getProvider(UserProfileProvider.class);
         UserProfile profile = profileProvider.create(UserProfileContext.REGISTRATION, formData);
 
@@ -77,14 +86,19 @@ public class CustomPersonalDataFormAction implements FormAction, FormActionFacto
 
     @Override
     public void success(FormContext context) {
-        // Called after validate method success
         MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
 
-        // Stocker les données personnelles dans la session pour les étapes suivantes
         context.getAuthenticationSession().setAuthNote("civility", formData.getFirst("civility"));
         context.getAuthenticationSession().setAuthNote("lastName", formData.getFirst("lastName"));
         context.getAuthenticationSession().setAuthNote("firstName", formData.getFirst("firstName"));
-        context.getAuthenticationSession().setAuthNote("profile", formData.getFirst("profile"));
+        // Save Profiles list as CSV format
+        List<String> profileValues = formData.get("profile");
+        if (profileValues != null && !profileValues.isEmpty()) {
+            String profilesAsString = profileValues.stream()
+                    .filter(v -> v != null && !v.trim().isEmpty())
+                    .collect(Collectors.joining(","));
+            context.getAuthenticationSession().setAuthNote("profile", profilesAsString);
+        }
     }
 
     @Override
